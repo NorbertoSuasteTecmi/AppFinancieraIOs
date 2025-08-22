@@ -1,0 +1,582 @@
+import SwiftUI
+import PlaygroundSupport
+
+// MARK: - Models
+
+struct Income: Identifiable, Codable {
+    let id = UUID()
+    var amount: Double
+    var netAmount: Double
+    var type: IncomeType
+    var date: Date
+    var description: String
+    var isRecurring: Bool
+    var recurringPeriod: RecurringPeriod
+    
+    enum IncomeType: String, CaseIterable, Codable {
+        case freelance = "Freelance"
+        case employment = "Empleo"
+        case investment = "Inversión"
+        case other = "Otro"
+    }
+    
+    enum RecurringPeriod: String, CaseIterable, Codable {
+        case none = "No recurrente"
+        case weekly = "Semanal"
+        case biweekly = "Quincenal"
+        case monthly = "Mensual"
+        case yearly = "Anual"
+    }
+}
+
+struct Deduction: Identifiable, Codable {
+    let id = UUID()
+    var type: DeductionType
+    var amount: Double
+    var date: Date
+    var description: String
+    
+    enum DeductionType: String, CaseIterable, Codable {
+        case isr = "ISR"
+        case imss = "IMSS"
+        case other = "Otro"
+    }
+}
+
+struct TaxCalculation {
+    var lowerLimit: Double = 15487.72
+    var marginalPercentage: Double = 21.36
+    
+    func calculateISR(for income: Double) -> Double {
+        if income <= lowerLimit {
+            return 0
+        } else {
+            let excess = income - lowerLimit
+            return excess * (marginalPercentage / 100)
+        }
+    }
+    
+    func calculateIMSS(for income: Double) -> Double {
+        return income * 0.025 // 2.5% del salario base
+    }
+}
+
+struct ExpenseCategory: Identifiable, Codable {
+    let id = UUID()
+    var name: String
+    var icon: String
+    var color: String
+    var type: CategoryType
+    
+    enum CategoryType: String, CaseIterable, Codable {
+        case fixedObligatory = "Fijo Obligatorio"
+        case fixedReducible = "Fijo Reducible"
+        case variable = "Variable"
+    }
+}
+
+struct Expense: Identifiable, Codable {
+    let id = UUID()
+    var amount: Double
+    var category: ExpenseCategory
+    var date: Date
+    var description: String
+    var isRecurring: Bool
+    var recurringPeriod: RecurringPeriod
+    
+    enum RecurringPeriod: String, CaseIterable, Codable {
+        case none = "No recurrente"
+        case weekly = "Semanal"
+        case biweekly = "Quincenal"
+        case monthly = "Mensual"
+        case yearly = "Anual"
+    }
+}
+
+struct FinancialPeriod: Identifiable, Codable {
+    let id = UUID()
+    var startDate: Date
+    var endDate: Date
+    var type: PeriodType
+    
+    enum PeriodType: String, CaseIterable, Codable {
+        case weekly = "Semanal"
+        case biweekly = "Quincenal"
+        case monthly = "Mensual"
+    }
+}
+
+// MARK: - ViewModels
+
+class DashboardViewModel: ObservableObject {
+    @Published var totalIncome: Double = 0
+    @Published var totalExpenses: Double = 0
+    @Published var balance: Double = 0
+    @Published var activePeriods: [FinancialPeriod] = []
+    
+    func updateBalance() {
+        balance = totalIncome - totalExpenses
+    }
+}
+
+class IncomeViewModel: ObservableObject {
+    @Published var incomes: [Income] = []
+    
+    func addIncome(_ income: Income) {
+        incomes.append(income)
+    }
+    
+    func calculateTotalIncome() -> Double {
+        return incomes.reduce(0) { $0 + $1.amount }
+    }
+}
+
+class ExpensesViewModel: ObservableObject {
+    @Published var expenses: [Expense] = []
+    
+    func addExpense(_ expense: Expense) {
+        expenses.append(expense)
+    }
+    
+    func calculateTotalExpenses() -> Double {
+        return expenses.reduce(0) { $0 + $1.amount }
+    }
+    
+    func getExpensesByCategory() -> [ExpenseCategory: [Expense]] {
+        return Dictionary(grouping: expenses) { $0.category }
+    }
+}
+
+class DeductionsViewModel: ObservableObject {
+    @Published var deductions: [Deduction] = []
+    private let taxCalculator = TaxCalculation()
+    
+    func calculateDeductions(for income: Double) -> [Deduction] {
+        let isr = taxCalculator.calculateISR(for: income)
+        let imss = taxCalculator.calculateIMSS(for: income)
+        
+        return [
+            Deduction(type: .isr, amount: isr, date: Date(), description: "ISR calculado automáticamente"),
+            Deduction(type: .imss, amount: imss, date: Date(), description: "IMSS calculado automáticamente")
+        ]
+    }
+}
+
+class ReportsViewModel: ObservableObject {
+    @Published var selectedPeriod: FinancialPeriod.PeriodType = .monthly
+    
+    func generateReport(for period: FinancialPeriod.PeriodType) -> String {
+        return "Reporte \(period.rawValue) generado"
+    }
+}
+
+// MARK: - Views
+
+struct DashboardView: View {
+    @ObservedObject var viewModel = DashboardViewModel()
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Balance Card
+                    VStack {
+                        Text("Balance Total")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Text("$\(viewModel.balance, specifier: "%.2f")")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(viewModel.balance >= 0 ? .green : .red)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color(.systemGray6))
+                    .cornerRadius(12)
+                    
+                    // Income vs Expenses
+                    HStack(spacing: 20) {
+                        VStack {
+                            Text("Ingresos")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("$\(viewModel.totalIncome, specifier: "%.2f")")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.green)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                        
+                        VStack {
+                            Text("Gastos")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("$\(viewModel.totalExpenses, specifier: "%.2f")")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.red)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                    }
+                }
+                .padding()
+            }
+            .navigationTitle("Dashboard")
+        }
+    }
+}
+
+struct IncomeView: View {
+    @ObservedObject var viewModel = IncomeViewModel()
+    @State private var showingAddIncome = false
+    
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(viewModel.incomes) { income in
+                    VStack(alignment: .leading) {
+                        Text(income.description)
+                            .font(.headline)
+                        Text("$\(income.amount, specifier: "%.2f")")
+                            .font(.title2)
+                            .foregroundColor(.green)
+                        Text(income.type.rawValue)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Ingresos")
+            .toolbar {
+                Button("Agregar") {
+                    showingAddIncome = true
+                }
+            }
+            .sheet(isPresented: $showingAddIncome) {
+                AddIncomeView(viewModel: viewModel)
+            }
+        }
+    }
+}
+
+struct AddIncomeView: View {
+    @ObservedObject var viewModel: IncomeViewModel
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var amount = ""
+    @State private var description = ""
+    @State private var selectedType = Income.IncomeType.freelance
+    @State private var isRecurring = false
+    @State private var selectedPeriod = Income.RecurringPeriod.none
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Detalles del Ingreso") {
+                    TextField("Monto", text: $amount)
+                        .keyboardType(.decimalPad)
+                    
+                    TextField("Descripción", text: $description)
+                    
+                    Picker("Tipo", selection: $selectedType) {
+                        ForEach(Income.IncomeType.allCases, id: \.self) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                }
+                
+                Section("Recurrencia") {
+                    Toggle("Es recurrente", isOn: $isRecurring)
+                    
+                    if isRecurring {
+                        Picker("Período", selection: $selectedPeriod) {
+                            ForEach(Income.RecurringPeriod.allCases, id: \.self) { period in
+                                Text(period.rawValue).tag(period)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Nuevo Ingreso")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") {
+                        if let amountValue = Double(amount), !description.isEmpty {
+                            let income = Income(
+                                amount: amountValue,
+                                netAmount: amountValue,
+                                type: selectedType,
+                                date: Date(),
+                                description: description,
+                                isRecurring: isRecurring,
+                                recurringPeriod: selectedPeriod
+                            )
+                            viewModel.addIncome(income)
+                            dismiss()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct ExpensesView: View {
+    @ObservedObject var viewModel = ExpensesViewModel()
+    @State private var showingAddExpense = false
+    
+    var body: some View {
+        NavigationView {
+            List {
+                ForEach(Array(viewModel.getExpensesByCategory().keys), id: \.id) { category in
+                    Section(category.name) {
+                        ForEach(viewModel.getExpensesByCategory()[category] ?? []) { expense in
+                            VStack(alignment: .leading) {
+                                Text(expense.description)
+                                    .font(.headline)
+                                Text("$\(expense.amount, specifier: "%.2f")")
+                                    .font(.title2)
+                                    .foregroundColor(.red)
+                                Text(expense.date, style: .date)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Gastos")
+            .toolbar {
+                Button("Agregar") {
+                    showingAddExpense = true
+                }
+            }
+            .sheet(isPresented: $showingAddExpense) {
+                AddExpenseView(viewModel: viewModel)
+            }
+        }
+    }
+}
+
+struct AddExpenseView: View {
+    @ObservedObject var viewModel: ExpensesViewModel
+    @Environment(\.dismiss) var dismiss
+    
+    @State private var amount = ""
+    @State private var description = ""
+    @State private var selectedCategory = ExpenseCategory(
+        name: "Alimentación",
+        icon: "fork.knife",
+        color: "red",
+        type: .variable
+    )
+    @State private var isRecurring = false
+    @State private var selectedPeriod = Expense.RecurringPeriod.none
+    
+    let categories = [
+        ExpenseCategory(name: "Alimentación", icon: "fork.knife", color: "red", type: .variable),
+        ExpenseCategory(name: "Transporte", icon: "car.fill", color: "blue", type: .fixedReducible),
+        ExpenseCategory(name: "Renta", icon: "house.fill", color: "purple", type: .fixedObligatory),
+        ExpenseCategory(name: "Servicios", icon: "bolt.fill", color: "yellow", type: .fixedReducible),
+        ExpenseCategory(name: "Ocio", icon: "gamecontroller.fill", color: "green", type: .variable)
+    ]
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section("Detalles del Gasto") {
+                    TextField("Monto", text: $amount)
+                        .keyboardType(.decimalPad)
+                    
+                    TextField("Descripción", text: $description)
+                    
+                    Picker("Categoría", selection: $selectedCategory) {
+                        ForEach(categories, id: \.id) { category in
+                            Text(category.name).tag(category)
+                        }
+                    }
+                }
+                
+                Section("Recurrencia") {
+                    Toggle("Es recurrente", isOn: $isRecurring)
+                    
+                    if isRecurring {
+                        Picker("Período", selection: $selectedPeriod) {
+                            ForEach(Expense.RecurringPeriod.allCases, id: \.self) { period in
+                                Text(period.rawValue).tag(period)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Nuevo Gasto")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") {
+                        if let amountValue = Double(amount), !description.isEmpty {
+                            let expense = Expense(
+                                amount: amountValue,
+                                category: selectedCategory,
+                                date: Date(),
+                                description: description,
+                                isRecurring: isRecurring,
+                                recurringPeriod: selectedPeriod
+                            )
+                            viewModel.addExpense(expense)
+                            dismiss()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct DeductionsView: View {
+    @ObservedObject var viewModel = DeductionsViewModel()
+    @State private var incomeAmount = ""
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                // Income Input
+                VStack(alignment: .leading) {
+                    Text("Ingreso Bruto")
+                        .font(.headline)
+                    TextField("Monto", text: $incomeAmount)
+                        .keyboardType(.decimalPad)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
+                .padding()
+                
+                // Calculate Button
+                Button("Calcular Deducciones") {
+                    if let amount = Double(incomeAmount) {
+                        viewModel.deductions = viewModel.calculateDeductions(for: amount)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(incomeAmount.isEmpty)
+                
+                // Deductions List
+                List {
+                    ForEach(viewModel.deductions) { deduction in
+                        VStack(alignment: .leading) {
+                            Text(deduction.type.rawValue)
+                                .font(.headline)
+                            Text("$\(deduction.amount, specifier: "%.2f")")
+                                .font(.title2)
+                                .foregroundColor(.red)
+                            Text(deduction.description)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Deducciones")
+        }
+    }
+}
+
+struct ReportsView: View {
+    @ObservedObject var viewModel = ReportsViewModel()
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                // Period Selection
+                Picker("Período", selection: $viewModel.selectedPeriod) {
+                    ForEach(FinancialPeriod.PeriodType.allCases, id: \.self) { period in
+                        Text(period.rawValue).tag(period)
+                    }
+                }
+                .pickerStyle(SegmentedPickerStyle())
+                .padding()
+                
+                // Report Content
+                VStack {
+                    Text("Reporte \(viewModel.selectedPeriod.rawValue)")
+                        .font(.title)
+                        .fontWeight(.bold)
+                    
+                    Text(viewModel.generateReport(for: viewModel.selectedPeriod))
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(12)
+                
+                Spacer()
+            }
+            .navigationTitle("Reportes")
+        }
+    }
+}
+
+struct ContentView: View {
+    var body: some View {
+        TabView {
+            DashboardView()
+                .tabItem {
+                    Image(systemName: "house.fill")
+                    Text("Dashboard")
+                }
+            
+            IncomeView()
+                .tabItem {
+                    Image(systemName: "dollarsign.circle.fill")
+                    Text("Ingresos")
+                }
+            
+            ExpensesView()
+                .tabItem {
+                    Image(systemName: "cart.fill")
+                    Text("Gastos")
+                }
+            
+            DeductionsView()
+                .tabItem {
+                    Image(systemName: "percent")
+                    Text("Deducciones")
+                }
+            
+            ReportsView()
+                .tabItem {
+                    Image(systemName: "chart.bar.fill")
+                    Text("Reportes")
+                }
+        }
+        .accentColor(.blue)
+    }
+}
+
+// MARK: - Playground Setup
+
+let contentView = ContentView()
+
+PlaygroundPage.current.setLiveView(contentView)

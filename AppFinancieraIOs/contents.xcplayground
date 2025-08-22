@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<playground name="AppFinancieraIOs" target-platform="ios" build-active-scheme="true" import-apple-builtins="false">
+    <timeline fileName="timeline.xctimeline"/>
+    <codeStyleScheme name="Default"/>
+</playground>
