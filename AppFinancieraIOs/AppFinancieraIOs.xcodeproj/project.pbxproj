@@ -195,7 +195,7 @@
 /* Begin PBXNativeTarget section */
 		A1234567890123456789012T /* AppFinancieraIOs */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A1234567890123456789012U /* Build configuration list for PBXNativeTarget "AppFinancieraIOs" */;
+			buildConfigurationList = A1234567890123456789012V /* Build configuration list for PBXNativeTarget "AppFinancieraIOs" */;
 			buildPhases = (
 				A1234567890123456789012V /* Sources */,
 				A1234567890123456789012G /* Frameworks */,
@@ -478,7 +478,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A1234567890123456789012U /* Build configuration list for PBXNativeTarget "AppFinancieraIOs" */ = {
+		A1234567890123456789012V /* Build configuration list for PBXNativeTarget "AppFinancieraIOs" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1234567890123456789012U /* Debug */,
